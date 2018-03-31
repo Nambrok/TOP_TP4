@@ -32,17 +32,13 @@ int main(int argc, char* argv[])
         offsets[1] = offsetof(int_bmp_pixel_t, Bleu);
         offsets[2] = offsetof(int_bmp_pixel_t, Vert);
 
-        MPI_Type_create_struct(width, blocklengths, offsets, types, &mpi_pixel_type);
+        MPI_Type_create_struct(width, blocklengths, offsets, types, &mpi_pixel_type); //Faut faire passer chaque ligne par ligne
         MPI_Type_commit(&mpi_pixel_type);
-
-        //TODO: tableau à deux dimensions.
 
         //Il faut lire une seule fois
         if(rank == ROOT) {
                 tabOrigin = Lecture_image("pingouin.bmp");
-                printf("get_img_heigh()\n");
                 height = get_img_heigh();
-                printf("get_img_width()\n");
                 width = get_img_width();
         }
         MPI_Bcast(&height, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
@@ -61,7 +57,7 @@ int main(int argc, char* argv[])
 
         for(i = 0; i<nproc; i++) {
                 sendCounts[i] = heightLoc;
-                displs[i] = i * sizeof(int);
+                displs[i] = i * sizeof(int_bmp_pixel_t) * width;
         }
 
         MPI_Scatterv(tabOrigin, sendCounts, displs, mpi_pixel_type, tab, sendCounts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
@@ -71,13 +67,15 @@ int main(int argc, char* argv[])
         {
                 for(j = 0; j < width/2; j++)
                 {
+                        printf("Rang : %d : (R,G,B) : (%d, %d, %d)\n", rank, tab[i][j].Rouge, tab[i][j].Vert, tab[i][j].Bleu);
                         tmp = tab[i][width - j - 1];
                         tab[i][width - j - 1] = tab[i][j];
                         tab[i][j] = tmp;
                 }
         }
 
-        // MPI_Gatherv();
+        // MPI_Scatterv(tabOrigin, sendCounts, displs, mpi_pixel_type, tab, sendCounts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
+        MPI_Gatherv(tab, sendCounts[rank], mpi_pixel_type, tabOrigin, sendCounts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
 
         //Miroir horizontal
         // for(i = 0; i < get_img_heigh()/2; i++)
@@ -92,7 +90,7 @@ int main(int argc, char* argv[])
         // }
 
         if(rank == 0) {
-                Ecriture_image(tab, "copie.bmp");
+                Ecriture_image(tabOrigin, "copie.bmp");
                 Liberation_image_lue(tabOrigin);
         }
 
