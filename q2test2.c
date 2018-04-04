@@ -18,7 +18,6 @@ int_bmp_pixel_t * transformerOneDim(int_bmp_pixel_t ** tab, int height, int widt
                 }
         }
 
-
         return tabO;
 }
 
@@ -42,13 +41,12 @@ int main(int argc, char* argv[])
 
 
         int height, width;
-        int_bmp_pixel_t ** tab = Lecture_image("pingouin.bmp");
-        // int_bmp_pixel_t ** tabOrigin = NULL;
-
+        int_bmp_pixel_t ** tab = NULL;
+        int_bmp_pixel_t * tabOneDim = NULL;
 
         int_bmp_pixel_t tmp;
 
-/* Création du type MPI pour un int_bmp_pixel_t*/
+        /* Création du type MPI pour un int_bmp_pixel_t*/
         int blocklengths[3] = {1, 1, 1};
         MPI_Datatype types[3] = {MPI_INT, MPI_INT, MPI_INT};
         MPI_Datatype mpi_pixel_type;
@@ -58,14 +56,15 @@ int main(int argc, char* argv[])
         offsets[1] = offsetof(int_bmp_pixel_t, Bleu);
         offsets[2] = offsetof(int_bmp_pixel_t, Vert);
 
-        MPI_Type_create_struct(3, blocklengths, offsets, types, &mpi_pixel_type); //Faut faire passer chaque ligne par ligne
+        MPI_Type_create_struct(3, blocklengths, offsets, types, &mpi_pixel_type);
         MPI_Type_commit(&mpi_pixel_type);
 
 
-        // tab = Lecture_image("pingouin.bmp");
         if(rank == ROOT) {
+                tab = Lecture_image("pingouin.bmp");
                 height = get_img_heigh();
                 width = get_img_width();
+                tabOneDim = transformerOneDim(tab, height, width);
         }
 
 
@@ -73,67 +72,38 @@ int main(int argc, char* argv[])
         MPI_Bcast(&height, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
         MPI_Bcast(&width, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
-        int_bmp_pixel_t * tabOneDim = transformerOneDim(tab, height, width);
-
-        for(i = 0; i<height*width; i++) {
-                printf("%d : %d, %d, %d\n", i, tabOneDim[i].Rouge, tabOneDim[i].Vert, tabOneDim[i].Bleu);
-        }
-
-        printf("%d : height : %d, width : %d\n", rank, height, width);
-
-
         int heightLoc = height / nproc;
 
-
         int_bmp_pixel_t * tabLocal = malloc(heightLoc * width * sizeof(int_bmp_pixel_t));
+
+        int * displs, * counts;
+        counts = calloc(nproc, sizeof(int));
+        displs = calloc(nproc, sizeof(int));
+        for(i = 0; i<nproc; i++) {
+                displs[i] = i * heightLoc * width;
+                counts[i] = heightLoc * width;
+        }
+
+        MPI_Scatterv(tabOneDim, counts, displs, mpi_pixel_type, tabLocal, counts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
 
         //Miroir Vertical
         for(i = 0; i < heightLoc; i++)
         {
                 for(j = 0; j < width/2; j++)
                 {
-                        // printf("Rang : %d : (R,G,B) : (%d, %d, %d)\n", rank, tab[i][j].Rouge, tab[i][j].Vert, tab[i][j].Bleu);
-                        // tmp = tab[(heightLoc * rank) + i][width - j - 1];
-                        // tab[(heightLoc * rank) + i][width - j - 1] = tab[(heightLoc * rank) + i][j];
-                        // tab[(heightLoc * rank) + i][j] = tmp;
-
-                        tmp = tab[(heightLoc * rank) + i][width - j - 1];
-                        tabLocal[(i * width) + (width - j - 1)] = tab[(heightLoc * rank) + i][j];
+                        tmp = tabLocal[(i * width) + (width - j - 1)];
+                        tabLocal[(i * width) + (width - j - 1)] = tabLocal[(i * width) + j];
                         tabLocal[i * width + j] = tmp;
-
-                        //Faut aller jusqu'ou ?
                 }
         }
 
         int_bmp_pixel_t * rbuf = NULL;
-        if(rank == ROOT) {
-                rbuf = calloc(height * width, sizeof(int_bmp_pixel_t));
-        }
-
-        int *rcounts, *displs;
-        if(rank == ROOT) {
-                rcounts = calloc(nproc, sizeof(int));
-                displs = calloc(nproc, sizeof(int));
-                for(i = 0; i<nproc; i++) {
-                        displs[i] = i * heightLoc * width;
-                        rcounts[i] = heightLoc * width;
-                }
-        }
 
 
-        // MPI_Gatherv(tabLocal, heightLoc * width, mpi_pixel_type, rbuf, rcounts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
-        MPI_Gatherv(tabLocal, heightLoc * width, mpi_pixel_type, rbuf, rcounts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
-
-        printf("Après Gatherv\n");
-
-        if(rank == ROOT) {
-                for(i = 0; i<height*width; i++) {
-                        printf("%d : (%d, %d, %d)\n", i, rbuf[i].Rouge, rbuf[i].Vert, rbuf[i].Bleu);
-                }
-        }
+        rbuf = calloc(height * width, sizeof(int_bmp_pixel_t));
 
 
-
+        MPI_Gatherv(tabLocal, counts[rank], mpi_pixel_type, rbuf, counts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
 
         if(rank == ROOT) {
                 transformerDeuxDim(tab, rbuf, height, width);
