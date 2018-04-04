@@ -230,7 +230,6 @@ void miroirHorizontal(char * file){
 int main(int argc, char* argv[])
 {
         MPI_Init(&argc, &argv);
-        double debut = MPI_Wtime();
         int nproc, rank;
         MPI_Comm_size(MPI_COMM_WORLD, &nproc);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -239,9 +238,6 @@ int main(int argc, char* argv[])
         miroirHorizontal("pingouin.bmp");
 
 
-        double fin = MPI_Wtime();
-        if(rank == ROOT)
-                printf("Temps : %gs", fin - debut);
 
         MPI_Finalize();
         return EXIT_SUCCESS;

@@ -1,5 +1,5 @@
 CC = mpicc
-CFLAGS = -Wall -Werror -O3 -g
+CFLAGS = -Wall -Werror -O0 -g
 NPROC = 2
 EXEC = a.out
 
