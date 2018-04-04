@@ -7,6 +7,24 @@
 
 #define ROOT 0
 
+int_bmp_pixel_t ** reallocationTab(int_bmp_pixel_t ** tabOrigin, int height, int width){
+        int_bmp_pixel_t * tmp = malloc(height * width * sizeof(int_bmp_pixel_t));
+        int_bmp_pixel_t ** newTab = NULL;
+        int i, j;
+        newTab = malloc(sizeof(int_bmp_pixel_t*) * height);
+        for(i = 0; i<height; i++) {
+                newTab[i] = &(tmp[i * width]);
+        }
+
+        for(i = 0; i<height; i++) {
+                for(j = 0; j<width; j++) {
+                        newTab[i][j] = tabOrigin[i][j];
+                }
+        }
+        // Liberation_image_lue(tabOrigin);
+        return newTab;
+}
+
 int main(int argc, char* argv[])
 {
         MPI_Init(&argc, &argv);
@@ -16,6 +34,7 @@ int main(int argc, char* argv[])
 
         int i, j;
 
+        int_bmp_pixel_t * tabTmp = NULL;
         int_bmp_pixel_t ** tab = NULL;
         int_bmp_pixel_t ** tabOrigin = NULL;
 
@@ -32,7 +51,8 @@ int main(int argc, char* argv[])
         offsets[1] = offsetof(int_bmp_pixel_t, Bleu);
         offsets[2] = offsetof(int_bmp_pixel_t, Vert);
 
-        MPI_Type_create_struct(width * sizeof(int_bmp_pixel_t), blocklengths, offsets, types, &mpi_pixel_type); //Faut faire passer chaque ligne par ligne
+
+        MPI_Type_create_struct(1, blocklengths, offsets, types, &mpi_pixel_type);
         MPI_Type_commit(&mpi_pixel_type);
 
         //Il faut lire une seule fois
@@ -40,27 +60,40 @@ int main(int argc, char* argv[])
                 tabOrigin = Lecture_image("pingouin.bmp");
                 height = get_img_heigh();
                 width = get_img_width();
+                tabOrigin = reallocationTab(tabOrigin, height, width);
         }
         MPI_Bcast(&height, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
         MPI_Bcast(&width, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
+
+
         printf("%d : height : %d, width : %d\n", rank, height, width);
 
+
         int heightLoc = height / nproc;
+
+        if(height/nproc % 2) {
+                printf("Nombre impair attention.\n");
+                //TODO: Prendre en compte une heightLoc différente pour plusieurs d'entre eux
+        }
+
+        tabTmp = malloc(heightLoc * width * sizeof(int_bmp_pixel_t));
         tab = malloc(sizeof(int_bmp_pixel_t*) * heightLoc);
         for(i = 0; i<heightLoc; i++) {
-                tab[i] = malloc(sizeof(int_bmp_pixel_t) * width);
+                tab[i] = &tabTmp[i * width];
         }
 
-        int * sendCounts = calloc(nproc, sizeof(int));
-        int * displs = calloc(nproc, sizeof(int));
+        // int * sendCounts = calloc(nproc, sizeof(int));
+        // int * displs = calloc(nproc, sizeof(int));
 
-        for(i = 0; i<nproc; i++) {
-                sendCounts[i] = heightLoc;
-                displs[i] = i * sizeof(int_bmp_pixel_t) * width;
-        }
 
-        MPI_Scatterv(tabOrigin, sendCounts, displs, mpi_pixel_type, tab, sendCounts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
+        // for(i = 0; i<nproc; i++) {
+        //         sendCounts[i] = heightLoc;
+        //         displs[i] = i * sizeof(int_bmp_pixel_t);
+        // }
+
+        // MPI_Scatterv(tabOrigin, sendCounts, displs, mpi_pixel_type, tab, sendCounts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
+        MPI_Scatter(tabOrigin[0], height*width, mpi_pixel_type, tab[0], height*width, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
 
         //Miroir Vertical
         for(i = 0; i < heightLoc; i++)
@@ -74,8 +107,7 @@ int main(int argc, char* argv[])
                 }
         }
 
-        // MPI_Scatterv(tabOrigin, sendCounts, displs, mpi_pixel_type, tab, sendCounts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
-        MPI_Gatherv(tab, sendCounts[rank], mpi_pixel_type, tabOrigin, sendCounts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
+        // MPI_Gatherv(tab, sendCounts[rank], mpi_pixel_type, tabOrigin, sendCounts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
 
         //Miroir horizontal
         // for(i = 0; i < get_img_heigh()/2; i++)
@@ -91,15 +123,8 @@ int main(int argc, char* argv[])
 
         if(rank == 0) {
                 Ecriture_image(tabOrigin, "copie.bmp");
-                Liberation_image_lue(tabOrigin);
+                // Liberation_image_lue(tabOrigin);
         }
-
-        for(i = 0; i<heightLoc; i++) {
-                free(tab[i]);
-        }
-        free(tab);
-        free(sendCounts);
-        free(displs);
 
 
         MPI_Finalize();

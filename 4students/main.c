@@ -5,24 +5,19 @@
 int main(int argc, char* argv[])
 {
 int i, j;
-int_bmp_pixel_t ** tab,**tab2,**tab3;
-
-tab = Lecture_image("pingouin.bmp");
-tab2 = Lecture_image("pingouin.bmp");
-tab3 = Lecture_image("pingouin.bmp");
+    int width = get_img_width_onemalloc("pingouin.bmp");
+    int_bmp_pixel_t (*tab)[width] = Lecture_image_onemalloc("pingouin.bmp");
 
 for(i = 0; i < get_img_heigh(); i++)
 {
-   for(j= 0; j < get_img_width(); j++)
+   for(j= 0; j < width; j++)
    {
-     tab[i][j].Vert = 0;
+     //tab[i][j].Vert = 0;
    }   
 }
 
-Ecriture_image(tab, "copie.bmp");
-Liberation_image_lue(tab);
-Liberation_image_lue(tab2);
-Liberation_image_lue(tab3);
+Ecriture_image_onemalloc(tab, "copie.bmp");
+Liberation_image_lue_onemalloc(tab);
 Liberation_finale();
 
 return EXIT_SUCCESS;

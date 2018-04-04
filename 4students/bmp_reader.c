@@ -6,6 +6,8 @@
 #include "bmp_internal.h"
 #include "bmp_reader.h"
 
+#define ONEALLOC "ONEALLOC"
+
 static bmp_header_infos_t *header = NULL;
 
 static void
@@ -34,8 +36,10 @@ readBMP_header(FILE *img)
     char FileType[3];                   // Obligatoirement Â« BM Â» pour du BMP
 
     /* Allocate bmp_header */
-    header = (bmp_header_infos_t *) malloc(sizeof(bmp_header_infos_t));
+    if (header == NULL)
+        header = (bmp_header_infos_t *) malloc(sizeof(bmp_header_infos_t));
     assert(header != NULL);
+
     
     /* Check img filetype */
     fread(FileType, sizeof(char), 2, img);
@@ -54,15 +58,43 @@ readBMP_header(FILE *img)
     
 }
 
+static int_bmp_pixel_t *
+readBMP_pixels_onemalloc(FILE *img)
+{
+    int i, j, ret;
+    int_bmp_pixel_t * PixelsTab = NULL;
+    char_bmp_pixel_t tmp;
+    assert(header != NULL);
+    PixelsTab = (int_bmp_pixel_t *) malloc((header->width)*(header->height)*sizeof(int_bmp_pixel_t));
+    assert(PixelsTab != NULL);
+
+    ret = 0;
+    for(i = 0; i < header->height; i++)
+    {
+	for(j = 0; j < header->width; j++)	 
+        {
+    	    ret += fread(&tmp, sizeof(char_bmp_pixel_t), 1, img);
+            PixelsTab[i*(header->width)+j].Rouge = (tmp.Rouge);
+	    //assert(PixelsTab_p[i][j].Rouge >= 0 && PixelsTab_p[i][j].Rouge < 256);
+            PixelsTab[i*(header->width)+j].Bleu = (int) (tmp.Bleu);
+	    //assert(PixelsTab_p[i][j].Bleu >= 0 && PixelsTab_p[i][j].Bleu < 256);
+            PixelsTab[i*header->width+j].Vert = (int) (tmp.Vert);
+	    //assert(PixelsTab[i][j].Vert >= 0 && PixelsTab[i][j].Vert < 256);
+	}
+    }
+
+    assert(ret == header->height*header->width);
+
+    return PixelsTab;
+}
+
 static int_bmp_pixel_t **
 readBMP_pixels(FILE *img)
 {
     int i, j, ret;
     int_bmp_pixel_t ** PixelsTab = NULL;
     char_bmp_pixel_t tmp;
-
     assert(header != NULL);
-    
     PixelsTab = (int_bmp_pixel_t **) malloc(header->height*sizeof(int_bmp_pixel_t *));
     assert(PixelsTab != NULL);
 
@@ -79,9 +111,9 @@ readBMP_pixels(FILE *img)
         {
     	    ret += fread(&tmp, sizeof(char_bmp_pixel_t), 1, img);
             PixelsTab[i][j].Rouge = (tmp.Rouge);
-	    //assert(PixelsTab[i][j].Rouge >= 0 && PixelsTab[i][j].Rouge < 256);
+	    //assert(PixelsTab_p[i][j].Rouge >= 0 && PixelsTab_p[i][j].Rouge < 256);
             PixelsTab[i][j].Bleu = (int) (tmp.Bleu);
-	    //assert(PixelsTab[i][j].Bleu >= 0 && PixelsTab[i][j].Bleu < 256);
+	    //assert(PixelsTab_p[i][j].Bleu >= 0 && PixelsTab_p[i][j].Bleu < 256);
             PixelsTab[i][j].Vert = (int) (tmp.Vert);
 	    //assert(PixelsTab[i][j].Vert >= 0 && PixelsTab[i][j].Vert < 256);
 	}
@@ -89,7 +121,7 @@ readBMP_pixels(FILE *img)
 
     assert(ret == header->height*header->width);
 
-    return PixelsTab;
+    return (int_bmp_pixel_t **)PixelsTab;
 }
 
 static void
@@ -106,6 +138,28 @@ writeBMP_header(FILE* img)
     return; 
 }
 
+static void
+writeBMP_pixels_onemalloc( int_bmp_pixel_t (*PixelsTab)[header->width], FILE* img)
+{
+    int i, j, ret;
+    char_bmp_pixel_t tmp;
+
+    ret = 0;
+    for(i = 0; i < header->height; i++)
+    {
+	for(j = 0; j < header->width; j++)	 
+        {
+            tmp.Rouge = (char) (PixelsTab[i][j].Rouge);
+	    //assert( PixelsTab[i][j].Rouge >= 0 &&  PixelsTab[i][j].Rouge < 256); 
+            tmp.Bleu = (char) (PixelsTab[i][j].Bleu); 
+	    //assert( PixelsTab[i][j].Bleu >= 0 &&  PixelsTab[i][j].Bleu < 256); 
+            tmp.Vert = (char) (PixelsTab[i][j].Vert); 
+	    //assert( PixelsTab[i][j].Vert >= 0 &&  PixelsTab[i][j].Vert < 256); 
+    	    ret += fwrite(&tmp, sizeof(char_bmp_pixel_t), 1, img);
+        }
+    }
+    assert(ret == header->height*header->width);
+}
 static void
 writeBMP_pixels( int_bmp_pixel_t ** PixelsTab, FILE* img)
 {
@@ -130,6 +184,22 @@ writeBMP_pixels( int_bmp_pixel_t ** PixelsTab, FILE* img)
 }
 
 static int 
+writeBMP_img_onemalloc(int_bmp_pixel_t (*pxl)[], char* filename)
+{
+    FILE *img = NULL;
+    
+    /* Openfile */
+    img = fopen(filename, "w");
+    assert(img != NULL);
+    
+    writeBMP_header(img);
+    writeBMP_pixels_onemalloc(pxl, img);
+    
+    /* close file */
+    fclose(img); 
+    return 0;
+}
+static int 
 writeBMP_img(int_bmp_pixel_t ** pxl, char* filename)
 {
     FILE *img = NULL;
@@ -144,6 +214,31 @@ writeBMP_img(int_bmp_pixel_t ** pxl, char* filename)
     /* close file */
     fclose(img); 
     return 0;
+}
+
+static int_bmp_pixel_t *
+readBMP_img_onemalloc(char* filename)
+{
+    int_bmp_pixel_t  * IntPixelsTab 	= NULL;
+    FILE *img = NULL;
+    
+    /* Openfile */
+    img = fopen(filename, "rb");
+    assert(img != NULL);
+    
+    printf("Read header ...\n");
+    readBMP_header(img);
+    assert(header != NULL);
+    
+    printf("Read pixels ...\n");
+    IntPixelsTab = readBMP_pixels_onemalloc(img);
+
+    assert(IntPixelsTab != NULL);
+    
+    /* close file */
+    fclose(img); 
+ 
+    return IntPixelsTab;
 }
 
 static int_bmp_pixel_t **
@@ -162,6 +257,7 @@ readBMP_img(char* filename)
     
     printf("Read pixels ...\n");
     IntPixelsTab = readBMP_pixels(img);
+
     assert(IntPixelsTab != NULL);
     
     /* close file */
@@ -173,6 +269,17 @@ readBMP_img(char* filename)
 /* Accessor header info: Width */
 int get_img_width(void)
 {
+    assert(header != NULL);
+    return header->width;
+}
+int get_img_width_onemalloc(char* filename)
+{
+    FILE *img = NULL;
+    img = fopen(filename, "rb");
+    assert(img != NULL);
+    
+    printf("Read header ...\n");
+    readBMP_header(img);
     assert(header != NULL);
     return header->width;
 }
@@ -197,12 +304,26 @@ int_bmp_pixel_t ** Lecture_image( char * filename)
     return readBMP_img(filename);
 }
 
+/* Lecture image */
+int_bmp_pixel_t (*Lecture_image_onemalloc( char * filename))[]
+{
+    return (int_bmp_pixel_t (*)[header->width]) readBMP_img_onemalloc(filename);
+}
+
 /* Ecriture image */
+int Ecriture_image_onemalloc( int_bmp_pixel_t (*img)[], char* filename)
+{
+    return writeBMP_img_onemalloc(img, filename);
+}
 int Ecriture_image( int_bmp_pixel_t ** img, char* filename)
 {
     return writeBMP_img(img, filename);
 }
 
+void Liberation_image_lue_onemalloc(int_bmp_pixel_t (*img)[])
+{
+    free(img);
+}
 void Liberation_image_lue(int_bmp_pixel_t ** img)
 {
     int i;
