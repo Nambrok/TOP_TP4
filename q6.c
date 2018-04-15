@@ -1,9 +1,9 @@
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stddef.h>
-#include <mpi.h>
-
 #include "bmp_reader.h"
+
+#include "mpi.h"
 
 #define ROOT 0
 
@@ -80,6 +80,20 @@ int_bmp_pixel_t * transformerOneDim(int_bmp_pixel_t ** tab, int height, int widt
         return tabO;
 }
 
+int_bmp_pixel_t * transformerOneDimTransposed(int_bmp_pixel_t ** tab, int height, int width){
+        //Renvoi un tableau d'une dimension de tab
+        int_bmp_pixel_t * tabO = calloc(height * width, sizeof(int_bmp_pixel_t));
+        int i, j;
+
+        for(i = 0; i<width; i++) {
+                for(j = 0; j<height; j++) {
+                        tabO[(i * width) + j] = tab[j][i];
+                }
+        }
+
+        return tabO;
+}
+
 void transformerDeuxDim(int_bmp_pixel_t ** tab, int_bmp_pixel_t * rbuf, int height, int width){
         int i, j;
         for(i = 0; i<height; i++) {
@@ -89,13 +103,28 @@ void transformerDeuxDim(int_bmp_pixel_t ** tab, int_bmp_pixel_t * rbuf, int heig
         }
 }
 
-int main(int argc, char * argv[]){
+//Attention transposé marche ici car la matrice est carré
 
-        MPI_Init(&argc, &argv);
-        int rank, nproc;
+void transformerDeuxDimTransposed(int_bmp_pixel_t ** tab, int_bmp_pixel_t * rbuf, int height, int width){
+        int i, j;
+        for(i = 0; i<width; i++) {
+                for(j = 0; j<height; j++) {
+                        tab[j][i] = rbuf[i * width + j];
+                }
+        }
+}
+
+void miroirVertical(char * file){
+        int nproc, rank;
         MPI_Comm_size(MPI_COMM_WORLD, &nproc);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+        int i, j;
+        int height, width;
+        int_bmp_pixel_t ** tab = NULL;
+        int_bmp_pixel_t * tabOneDim = NULL;
+
+        /* Création du type MPI pour un int_bmp_pixel_t*/
         int blocklengths[3] = {1, 1, 1};
         MPI_Datatype types[3] = {MPI_INT, MPI_INT, MPI_INT};
         MPI_Datatype mpi_pixel_type;
@@ -108,23 +137,20 @@ int main(int argc, char * argv[]){
         MPI_Type_create_struct(3, blocklengths, offsets, types, &mpi_pixel_type);
         MPI_Type_commit(&mpi_pixel_type);
 
-        int i, j;
-        int height, heightLoc, width;
-
-        int_bmp_pixel_t ** tabOrigin = NULL;
-        int_bmp_pixel_t * tab = NULL;
-        int_bmp_pixel_t * res = NULL;
-        int_bmp_pixel_t * rbuf = NULL;
-        heightLoc = height / nproc;
 
         if(rank == ROOT) {
-                tabOrigin = Lecture_image("pingouin.bmp");
+                tab = Lecture_image(file);
                 height = get_img_heigh();
                 width = get_img_width();
-                tab = transformerOneDim(tabOrigin, height, width);
+                tabOneDim = transformerOneDim(tab, height, width);
         }
+
+
+
         MPI_Bcast(&height, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
         MPI_Bcast(&width, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+
+        int heightLoc = height / nproc;
 
         int * displs, * counts;
         counts = calloc(nproc, sizeof(int));
@@ -136,28 +162,53 @@ int main(int argc, char * argv[]){
         counts[i-1] += height%nproc * width;
 
         int_bmp_pixel_t * tabLocal = malloc(counts[rank] * sizeof(int_bmp_pixel_t));
-
-        MPI_Scatterv(tab, counts, displs, mpi_pixel_type, tabLocal, counts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
+        int_bmp_pixel_t * res;
+        MPI_Scatterv(tabOneDim, counts, displs, mpi_pixel_type, tabLocal, counts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
 
         res = calloc(counts[rank], sizeof(int_bmp_pixel_t));
 
         int heightSelf = counts[rank] / width;
-        for(i = 0; i<heightSelf; i++) {
-                for(j = 0; j<width; j++) {
+        for(i = 0; i < heightSelf; i++) {
+                for(j = 0; j < width; j++) {
                         somme(res, tabLocal, i, j, heightSelf, width);
                 }
         }
 
-        if(rank == ROOT)
-                rbuf = calloc(height * width, sizeof(int_bmp_pixel_t));
+        int_bmp_pixel_t * rbuf = NULL;
+
+        rbuf = calloc(height * width, sizeof(int_bmp_pixel_t));
+
         MPI_Gatherv(res, counts[rank], mpi_pixel_type, rbuf, counts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
 
         if(rank == ROOT) {
-                transformerDeuxDim(tabOrigin, rbuf, height, width);
-                Ecriture_image(tabOrigin, "copie.bmp");
-                Liberation_image_lue(tabOrigin);
+                transformerDeuxDim(tab, rbuf, height, width);
+                Ecriture_image(tab, "copie.bmp");
+                Liberation_image_lue(tab);
+                free(rbuf);
+                free(tabOneDim);
         }
+        free(tabLocal);
+        free(counts);
+        free(displs);
+        MPI_Type_free(&mpi_pixel_type);
+}
 
-        return EXIT_SUCCESS;
+int main(int argc, char* argv[])
+{
+        MPI_Init(&argc, &argv);
+        double debut = MPI_Wtime();
+        int nproc, rank;
+        MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+        miroirVertical("pingouin.bmp");
+
+
+        double fin = MPI_Wtime();
+        if(rank == ROOT)
+                printf("Temps : %gs", fin - debut);
+
         MPI_Finalize();
+        return EXIT_SUCCESS;
+
 }
