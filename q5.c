@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "bmp_reader.h"
+#include <mpi.h>
 
 void somme(int_bmp_pixel_t * res, int_bmp_pixel_t ** tab, int i, int j, int height, int width){
         double resRed = 0;
@@ -57,10 +58,6 @@ void somme(int_bmp_pixel_t * res, int_bmp_pixel_t ** tab, int i, int j, int heig
                 nombreCases++;
         }
 
-        // tab[i][j].Rouge = (int) (resRed / nombreCases);
-        // tab[i][j].Bleu = (int) (resBlue / nombreCases);
-        // tab[i][j].Vert = (int) (resGreen / nombreCases);
-
         res[i * width + j].Rouge = (int) (resRed / nombreCases);
         res[i * width + j].Bleu = (int) (resBlue / nombreCases);
         res[i * width + j].Vert = (int) (resGreen / nombreCases);
@@ -77,7 +74,7 @@ void transformerDeuxDim(int_bmp_pixel_t ** tab, int_bmp_pixel_t * rbuf, int heig
 
 int main(int argc, char * argv[]){
 
-
+        MPI_Init(&argc, &argv);
         int i, j;
         int height, width;
 
@@ -86,7 +83,7 @@ int main(int argc, char * argv[]){
         width = get_img_width();
 
         int_bmp_pixel_t * res = calloc(height * width, sizeof(int_bmp_pixel_t));
-
+        double debut = MPI_Wtime();
         for(i = 0; i<height; i++) {
                 for(j = 0; j<width; j++) {
                         somme(res, tab, i, j, height, width);
@@ -94,9 +91,13 @@ int main(int argc, char * argv[]){
         }
 
         transformerDeuxDim(tab, res, height, width);
+        double fin = MPI_Wtime();
+
+        printf("Temps : %gs", fin - debut);
 
         Ecriture_image(tab, "copie.bmp");
         Liberation_image_lue(tab);
 
+        MPI_Finalize();
         return EXIT_SUCCESS;
 }

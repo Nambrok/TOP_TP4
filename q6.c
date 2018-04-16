@@ -7,7 +7,7 @@
 
 #define ROOT 0
 
-void somme(int_bmp_pixel_t * res, int_bmp_pixel_t * tab, int i, int j, int height, int width, int_bmp_pixel_t * fantome){
+void somme(int_bmp_pixel_t * res, int_bmp_pixel_t * tab, int i, int j, int height, int width, int_bmp_pixel_t * fantomeHaut, int_bmp_pixel_t * fantomeBas){
         double resRed = 0;
         double resBlue = 0;
         double resGreen = 0;
@@ -23,25 +23,25 @@ void somme(int_bmp_pixel_t * res, int_bmp_pixel_t * tab, int i, int j, int heigh
         resGreen += tab[i * width + j].Vert;
         nombreCases++;
 
-        if(i > 1) {
+        if(i > 0) {
                 resRed += tab[(i-1) * width + j].Rouge;
                 resBlue += tab[(i-1) * width + j].Bleu;
                 resGreen += tab[(i-1) * width + j].Vert;
                 nombreCases++;
         }
-        if(i > 1 && j > 1) {
+        if(i > 0 && j > 0) {
                 resRed += tab[(i-1) * width + (j-1)].Rouge;
                 resBlue += tab[(i-1) * width + (j-1)].Bleu;
                 resGreen += tab[(i-1) * width + (j-1)].Vert;
                 nombreCases++;
         }
-        if(j > 1) {
+        if(j > 0) {
                 resRed += tab[i * width + (j-1)].Rouge;
                 resBlue += tab[i * width + (j-1)].Bleu;
                 resGreen += tab[i * width + (j-1)].Vert;
                 nombreCases++;
         }
-        if(i > 1 && j < width-1) {
+        if(i > 0 && j < width-1) {
                 resRed += tab[(i-1) * width + (j+1)].Rouge;
                 resBlue += tab[(i-1) * width + (j+1)].Bleu;
                 resGreen += tab[(i-1) * width + (j+1)].Vert;
@@ -59,95 +59,54 @@ void somme(int_bmp_pixel_t * res, int_bmp_pixel_t * tab, int i, int j, int heigh
                 resGreen += tab[(i+1) * width + (j+1)].Vert;
                 nombreCases++;
         }
-        if(j > 1 && i < height-1) {
+        if(j > 0 && i < height-2) {
                 resRed += tab[(i+1) * width + (j-1)].Rouge;
                 resBlue += tab[(i+1) * width + (j-1)].Bleu;
                 resGreen += tab[(i+1) * width + (j-1)].Vert;
                 nombreCases++;
         }
 
-        //Cas pour les cellules fantômes.
-        if(nproc > 1 && fantome != NULL) {
-                if(rank == ROOT && i == height-1) {//Le premier processus
-                        if(j<width-1) {
-                                resRed += fantome[j+1].Rouge;
-                                resBlue += fantome[j+1].Bleu;
-                                resGreen += fantome[j+1].Vert;
-                                nombreCases++;
-                        }
-
-                        resRed += fantome[j].Rouge;
-                        resBlue += fantome[j].Bleu;
-                        resGreen += fantome[j].Vert;
+        if(fantomeHaut != NULL && i == 0) {
+                if(j > 0) {
+                        resRed += fantomeHaut[j-1].Rouge;
+                        resBlue += fantomeHaut[j-1].Bleu;
+                        resGreen += fantomeHaut[j-1].Vert;
                         nombreCases++;
-
-                        if(j>1) {
-                                resRed += fantome[j-1].Rouge;
-                                resBlue += fantome[j-1].Bleu;
-                                resGreen += fantome[j-1].Vert;
-                                nombreCases++;
-                        }
                 }
-                else if(rank == (nproc-1) && i == 0) {//Le dernier
-                        if(j<width-1) {
-                                resRed += fantome[j+1].Rouge;
-                                resBlue += fantome[j+1].Bleu;
-                                resGreen += fantome[j+1].Vert;
-                                nombreCases++;
-                        }
 
-                        resRed += fantome[j].Rouge;
-                        resBlue += fantome[j].Bleu;
-                        resGreen += fantome[j].Vert;
+                if(j<width-1) {
+                        resRed += fantomeHaut[j+1].Rouge;
+                        resBlue += fantomeHaut[j+1].Bleu;
+                        resGreen += fantomeHaut[j+1].Vert;
                         nombreCases++;
-
-                        if(j>1) {
-                                resRed += fantome[j-1].Rouge;
-                                resBlue += fantome[j-1].Bleu;
-                                resGreen += fantome[j-1].Vert;
-                                nombreCases++;
-                        }
                 }
-                else{//Les autres
-                        if(i == 0) {
-                                if(j<width-1) {
-                                        resRed += fantome[j+1].Rouge;
-                                        resBlue += fantome[j+1].Bleu;
-                                        resGreen += fantome[j+1].Vert;
-                                        nombreCases++;
-                                }
 
-                                resRed += fantome[j].Rouge;
-                                resBlue += fantome[j].Bleu;
-                                resGreen += fantome[j].Vert;
-                                nombreCases++;
+                resRed += fantomeHaut[j].Rouge;
+                resBlue += fantomeHaut[j].Bleu;
+                resGreen += fantomeHaut[j].Vert;
+                nombreCases++;
 
-                                if(j>1) {
-                                        resRed += fantome[j-1].Rouge;
-                                        resBlue += fantome[j-1].Bleu;
-                                        resGreen += fantome[j-1].Vert;
-                                        nombreCases++;
-                                }
-                        }
-                        if(i == height-1) {
-                                if(j<width-1) {
-                                        resRed += fantome[width + j+1].Rouge;
-                                        resBlue += fantome[width + j+1].Bleu;
-                                        resGreen += fantome[width + j+1].Vert;
-                                }
+        }
 
-                                resRed += fantome[width + j].Rouge;
-                                resBlue += fantome[width + j].Bleu;
-                                resGreen += fantome[width + j].Vert;
-                                nombreCases++;
-                                if(j>1) {
-                                        resRed += fantome[width + j-1].Rouge;
-                                        resBlue += fantome[width + j-1].Bleu;
-                                        resGreen += fantome[width + j-1].Vert;
-                                        nombreCases++;
-                                }
-                        }
+        if(fantomeBas != NULL && i == height-1) {
+                if(j > 0) {
+                        resRed += fantomeBas[j-1].Rouge;
+                        resBlue += fantomeBas[j-1].Bleu;
+                        resGreen += fantomeBas[j-1].Vert;
+                        nombreCases++;
                 }
+
+                if(j<width-1) {
+                        resRed += fantomeBas[j+1].Rouge;
+                        resBlue += fantomeBas[j+1].Bleu;
+                        resGreen += fantomeBas[j+1].Vert;
+                        nombreCases++;
+                }
+
+                resRed += fantomeBas[j].Rouge;
+                resBlue += fantomeBas[j].Bleu;
+                resGreen += fantomeBas[j].Vert;
+                nombreCases++;
         }
 
         res[i * width + j].Rouge = (int) (resRed / nombreCases);
@@ -234,8 +193,6 @@ void flou(char * file){
                 tabOneDim = transformerOneDim(tab, height, width);
         }
 
-
-
         MPI_Bcast(&height, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
         MPI_Bcast(&width, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
@@ -258,32 +215,32 @@ void flou(char * file){
 
         res = calloc(counts[rank], sizeof(int_bmp_pixel_t));
 
-
-        int_bmp_pixel_t * fantome = NULL;
+        int_bmp_pixel_t * fantomeHaut = NULL;
+        int_bmp_pixel_t * fantomeBas = NULL;
         if(nproc > 1) {
                 if(rank == ROOT) {//Le premier processus
-                        fantome = calloc(width, sizeof(int_bmp_pixel_t));
+                        fantomeBas = calloc(width, sizeof(int_bmp_pixel_t));
                         MPI_Send(&(tabLocal[(heightSelf-1) * width]), width, mpi_pixel_type, rank+1, 10, MPI_COMM_WORLD); // On envoie notre dernière ligne en dessous
-                        MPI_Recv(fantome, width, mpi_pixel_type, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        MPI_Recv(fantomeBas, width, mpi_pixel_type, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 }
                 else if(rank == (nproc-1)) {//Le dernier
-                        fantome = calloc(width, sizeof(int_bmp_pixel_t));
-                        MPI_Recv(fantome, width, mpi_pixel_type, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                        MPI_Send(&(tabLocal[0]), width, mpi_pixel_type, rank-1, 10, MPI_COMM_WORLD); //On envoie notre première ligne au dessus
+                        fantomeHaut = calloc(width, sizeof(int_bmp_pixel_t));
+                        MPI_Recv(fantomeHaut, width, mpi_pixel_type, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        MPI_Send(tabLocal, width, mpi_pixel_type, rank-1, 10, MPI_COMM_WORLD); //On envoie notre première ligne au dessus
                 }
                 else{//Les autres
-                        fantome = calloc(2 * width, sizeof(int_bmp_pixel_t));
-                        MPI_Recv(fantome, width, mpi_pixel_type, rank-1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        fantomeHaut = calloc(width, sizeof(int_bmp_pixel_t));
+                        fantomeBas = calloc(width, sizeof(int_bmp_pixel_t));
+                        MPI_Recv(fantomeHaut, width, mpi_pixel_type, rank-1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                         MPI_Send(&(tabLocal[(heightSelf-1) * width]), width, mpi_pixel_type, rank+1, 10, MPI_COMM_WORLD);
-                        MPI_Recv(fantome+width, width, mpi_pixel_type, rank+1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                        MPI_Send(&(tabLocal[0]), width, mpi_pixel_type, rank-1, 10, MPI_COMM_WORLD);
+                        MPI_Recv(fantomeBas, width, mpi_pixel_type, rank+1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        MPI_Send(tabLocal, width, mpi_pixel_type, rank-1, 10, MPI_COMM_WORLD);
                 }
         }
 
-
         for(i = 0; i < heightSelf; i++) {
                 for(j = 0; j < width; j++) {
-                        somme(res, tabLocal, i, j, heightSelf, width, fantome);
+                        somme(res, tabLocal, i, j, heightSelf, width, fantomeHaut, fantomeBas);
                 }
         }
 
@@ -291,7 +248,6 @@ void flou(char * file){
 
         rbuf = calloc(height * width, sizeof(int_bmp_pixel_t));
 
-        printf("%d : %d\n", rank, counts[rank]/width);
         MPI_Gatherv(res, counts[rank], mpi_pixel_type, rbuf, counts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
 
         if(rank == ROOT) {
@@ -304,7 +260,6 @@ void flou(char * file){
         free(tabLocal);
         free(counts);
         free(displs);
-        free(fantome);
         MPI_Type_free(&mpi_pixel_type);
 }
 
