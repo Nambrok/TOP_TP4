@@ -255,43 +255,47 @@ void flou(char * file){
 
         int heightLoc = height / nproc;
 
-        int * displs, * counts;
-        counts = calloc(nproc, sizeof(int));
+        int * displs, * ReqCounts;
+        ReqCounts = calloc(nproc, sizeof(int));
         displs = calloc(nproc, sizeof(int));
         for(i = 0; i<nproc; i++) {
                 displs[i] = i * heightLoc * width;
-                counts[i] = heightLoc * width;
+                ReqCounts[i] = heightLoc * width;
         }
-        counts[i-1] += height%nproc * width;
+        ReqCounts[i-1] += height%nproc * width;
 
-        int heightSelf = counts[rank] / width; //Savoir combien on doit en traiter personellement.
+        int heightSelf = ReqCounts[rank] / width; //Savoir combien on doit en traiter personellement.
 
-        int_bmp_pixel_t * tabLocal = malloc(counts[rank] * sizeof(int_bmp_pixel_t));
+        int_bmp_pixel_t * tabLocal = malloc(ReqCounts[rank] * sizeof(int_bmp_pixel_t));
         int_bmp_pixel_t * res;
-        MPI_Scatterv(tabOneDim, counts, displs, mpi_pixel_type, tabLocal, counts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
+        MPI_Scatterv(tabOneDim, ReqCounts, displs, mpi_pixel_type, tabLocal, ReqCounts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
 
-        res = calloc(counts[rank], sizeof(int_bmp_pixel_t));
+        res = calloc(ReqCounts[rank], sizeof(int_bmp_pixel_t));
 
         int_bmp_pixel_t * fantomeHaut = NULL;
         int_bmp_pixel_t * fantomeBas = NULL;
+        MPI_Request request[4]; int ReqCount;
         if(nproc > 1) {
                 if(rank == ROOT) {//Le premier processus
                         fantomeBas = calloc(width, sizeof(int_bmp_pixel_t));
-                        MPI_Send(&(tabLocal[(heightSelf-1) * width]), width, mpi_pixel_type, rank+1, 10, MPI_COMM_WORLD); // On envoie notre dernière ligne en dessous
-                        MPI_Recv(fantomeBas, width, mpi_pixel_type, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        MPI_Isend(&(tabLocal[(heightSelf-1) * width]), width, mpi_pixel_type, rank+1, 10, MPI_COMM_WORLD, &(request[0])); // On envoie notre dernière ligne en dessous
+                        MPI_Irecv(fantomeBas, width, mpi_pixel_type, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &(request[1]));
+                        ReqCount = 2;
                 }
                 else if(rank == (nproc-1)) {//Le dernier
                         fantomeHaut = calloc(width, sizeof(int_bmp_pixel_t));
-                        MPI_Recv(fantomeHaut, width, mpi_pixel_type, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                        MPI_Send(tabLocal, width, mpi_pixel_type, rank-1, 10, MPI_COMM_WORLD); //On envoie notre première ligne au dessus
+                        MPI_Irecv(fantomeHaut, width, mpi_pixel_type, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &(request[0]));
+                        MPI_Isend(tabLocal, width, mpi_pixel_type, rank-1, 10, MPI_COMM_WORLD, &(request[1])); //On envoie notre première ligne au dessus
+                        ReqCount = 2;
                 }
                 else{//Les autres
                         fantomeHaut = calloc(width, sizeof(int_bmp_pixel_t));
                         fantomeBas = calloc(width, sizeof(int_bmp_pixel_t));
-                        MPI_Recv(fantomeHaut, width, mpi_pixel_type, rank-1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                        MPI_Send(&(tabLocal[(heightSelf-1) * width]), width, mpi_pixel_type, rank+1, 10, MPI_COMM_WORLD);
-                        MPI_Recv(fantomeBas, width, mpi_pixel_type, rank+1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                        MPI_Send(tabLocal, width, mpi_pixel_type, rank-1, 10, MPI_COMM_WORLD);
+                        MPI_Irecv(fantomeHaut, width, mpi_pixel_type, rank-1, MPI_ANY_TAG, MPI_COMM_WORLD, &(request[0]));
+                        MPI_Isend(&(tabLocal[(heightSelf-1) * width]), width, mpi_pixel_type, rank+1, 10, MPI_COMM_WORLD, &(request[1]));
+                        MPI_Irecv(fantomeBas, width, mpi_pixel_type, rank+1, MPI_ANY_TAG, MPI_COMM_WORLD, &(request[2]));
+                        MPI_Isend(tabLocal, width, mpi_pixel_type, rank-1, 10, MPI_COMM_WORLD, &(request[3]));
+                        ReqCount = 4;
                 }
         }
 
@@ -302,6 +306,9 @@ void flou(char * file){
                 }
         }
 
+        MPI_Status sta[ReqCount];
+        MPI_Waitall(ReqCount, request, sta);
+
         for(j = 0; j<width; j++) {
                 sommeFantome(res, tabLocal, 0, j, heightSelf, width, fantomeHaut, fantomeBas);
                 sommeFantome(res, tabLocal, heightSelf-1, j, heightSelf, width, fantomeHaut, fantomeBas);
@@ -311,7 +318,7 @@ void flou(char * file){
 
         rbuf = calloc(height * width, sizeof(int_bmp_pixel_t));
 
-        MPI_Gatherv(res, counts[rank], mpi_pixel_type, rbuf, counts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
+        MPI_Gatherv(res, ReqCounts[rank], mpi_pixel_type, rbuf, ReqCounts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
 
         if(rank == ROOT) {
                 transformerDeuxDim(tab, rbuf, height, width);
@@ -321,7 +328,7 @@ void flou(char * file){
                 free(tabOneDim);
         }
         free(tabLocal);
-        free(counts);
+        free(ReqCounts);
         free(displs);
         MPI_Type_free(&mpi_pixel_type);
 }
