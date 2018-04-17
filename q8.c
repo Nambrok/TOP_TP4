@@ -7,7 +7,66 @@
 
 #define ROOT 0
 
-void somme(int_bmp_pixel_t * res, int_bmp_pixel_t * tab, int i, int j, int height, int width, int_bmp_pixel_t * fantomeHaut, int_bmp_pixel_t * fantomeBas){
+void somme(int_bmp_pixel_t * res, int_bmp_pixel_t * tab, int i, int j, int height, int width){
+        double resRed = 0;
+        double resBlue = 0;
+        double resGreen = 0;
+        int nombreCases = 0;
+
+        resRed += tab[i * width + j].Rouge;
+        resBlue += tab[i * width + j].Bleu;
+        resGreen += tab[i * width + j].Vert;
+        nombreCases++;
+
+        if(i > 0) {
+                resRed += tab[(i-1) * width + j].Rouge;
+                resBlue += tab[(i-1) * width + j].Bleu;
+                resGreen += tab[(i-1) * width + j].Vert;
+                nombreCases++;
+        }
+        if(i > 0 && j > 0) {
+                resRed += tab[(i-1) * width + (j-1)].Rouge;
+                resBlue += tab[(i-1) * width + (j-1)].Bleu;
+                resGreen += tab[(i-1) * width + (j-1)].Vert;
+                nombreCases++;
+        }
+        if(j > 0) {
+                resRed += tab[i * width + (j-1)].Rouge;
+                resBlue += tab[i * width + (j-1)].Bleu;
+                resGreen += tab[i * width + (j-1)].Vert;
+                nombreCases++;
+        }
+        if(i > 0 && j < width-1) {
+                resRed += tab[(i-1) * width + (j+1)].Rouge;
+                resBlue += tab[(i-1) * width + (j+1)].Bleu;
+                resGreen += tab[(i-1) * width + (j+1)].Vert;
+                nombreCases++;
+        }
+        if(i<height-1) {
+                resRed += tab[(i+1) * width + j].Rouge;
+                resBlue += tab[(i+1) * width + j].Bleu;
+                resGreen += tab[(i+1) * width + j].Vert;
+                nombreCases++;
+        }
+        if(i < height-1 && j < width-1) {
+                resRed += tab[(i+1) * width + (j+1)].Rouge;
+                resBlue += tab[(i+1) * width + (j+1)].Bleu;
+                resGreen += tab[(i+1) * width + (j+1)].Vert;
+                nombreCases++;
+        }
+        if(j > 0 && i < height-2) {
+                resRed += tab[(i+1) * width + (j-1)].Rouge;
+                resBlue += tab[(i+1) * width + (j-1)].Bleu;
+                resGreen += tab[(i+1) * width + (j-1)].Vert;
+                nombreCases++;
+        }
+
+        res[i * width + j].Rouge = (int) (resRed / nombreCases);
+        res[i * width + j].Bleu = (int) (resBlue / nombreCases);
+        res[i * width + j].Vert = (int) (resGreen / nombreCases);
+}
+
+void sommeFantome(int_bmp_pixel_t * res, int_bmp_pixel_t * tab, int i, int j, int height, int width, int_bmp_pixel_t * fantomeHaut, int_bmp_pixel_t * fantomeBas){
         double resRed = 0;
         double resBlue = 0;
         double resGreen = 0;
@@ -236,10 +295,16 @@ void flou(char * file){
                 }
         }
 
-        for(i = 0; i < heightSelf; i++) {
+
+        for(i = 1; i < heightSelf-1; i++) {
                 for(j = 0; j < width; j++) {
-                        somme(res, tabLocal, i, j, heightSelf, width, fantomeHaut, fantomeBas);
+                        somme(res, tabLocal, i, j, heightSelf, width);
                 }
+        }
+
+        for(j = 0; j<width; j++) {
+                sommeFantome(res, tabLocal, 0, j, heightSelf, width, fantomeHaut, fantomeBas);
+                sommeFantome(res, tabLocal, heightSelf-1, j, heightSelf, width, fantomeHaut, fantomeBas);
         }
 
         int_bmp_pixel_t * rbuf = NULL;
