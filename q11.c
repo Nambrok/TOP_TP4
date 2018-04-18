@@ -8,10 +8,10 @@
 #define ROOT 0
 
 enum couleur {
+        All,
         Rouge,
         Vert,
-        Bleu,
-        All
+        Bleu
 };
 
 void somme(int_bmp_pixel_t * res, int_bmp_pixel_t * tab, int i, int j, int height, int width, enum couleur col){
@@ -266,7 +266,8 @@ void transformerDeuxDimTransposed(int_bmp_pixel_t ** tab, int_bmp_pixel_t * rbuf
         }
 }
 
-void flou(char * file){
+void flou(char * file, enum couleur col){
+
         int nproc, rank;
         MPI_Comm_size(MPI_COMM_WORLD, &nproc);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -349,7 +350,7 @@ void flou(char * file){
 
         for(i = 1; i < heightSelf-1; i++) {
                 for(j = 0; j < width; j++) {
-                        somme(res, tabLocal, i, j, heightSelf, width, All);
+                        somme(res, tabLocal, i, j, heightSelf, width, col);
                 }
         }
 
@@ -357,8 +358,8 @@ void flou(char * file){
         MPI_Waitall(ReqCount, request, sta);
 
         for(j = 0; j<width; j++) {
-                sommeFantome(res, tabLocal, 0, j, heightSelf, width, fantomeHaut, fantomeBas, All);
-                sommeFantome(res, tabLocal, heightSelf-1, j, heightSelf, width, fantomeHaut, fantomeBas, All);
+                sommeFantome(res, tabLocal, 0, j, heightSelf, width, fantomeHaut, fantomeBas, col);
+                sommeFantome(res, tabLocal, heightSelf-1, j, heightSelf, width, fantomeHaut, fantomeBas, col);
         }
 
         int_bmp_pixel_t * rbuf = NULL;
@@ -383,12 +384,15 @@ void flou(char * file){
 int main(int argc, char* argv[])
 {
         MPI_Init(&argc, &argv);
-
+        enum couleur col = All;
+        if(argc > 1) {
+                col = atoi(argv[1]);
+        }
         int nproc, rank;
         MPI_Comm_size(MPI_COMM_WORLD, &nproc);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-        flou("pingouin.bmp");
+        flou("pingouin.bmp", col);
 
         MPI_Finalize();
         return EXIT_SUCCESS;
