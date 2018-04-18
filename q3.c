@@ -192,10 +192,12 @@ void miroirHorizontal(char * file){
 
         int_bmp_pixel_t * tabLocal = malloc(counts[rank] * sizeof(int_bmp_pixel_t));
 
-        MPI_Scatterv(tabOneDim, counts, displs, mpi_pixel_type, tabLocal, counts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD);
+        MPI_Request req; MPI_Status sta;
+        MPI_Iscatterv(tabOneDim, counts, displs, mpi_pixel_type, tabLocal, counts[rank], mpi_pixel_type, ROOT, MPI_COMM_WORLD, &req);
 
         //Miroir Vertical
         int heightSelf = counts[rank] / width;
+        MPI_Wait(&req, &sta);
         for(i = 0; i < heightSelf; i++) {
                 for(j = 0; j < width/2; j++) {
                         tmp = tabLocal[(i * width) + (width - j - 1)];
@@ -211,8 +213,9 @@ void miroirHorizontal(char * file){
                 rbuf = calloc(height * width, sizeof(int_bmp_pixel_t));
 
 
-        MPI_Gatherv(tabLocal, counts[rank], mpi_pixel_type, rbuf, counts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD);
+        MPI_Igatherv(tabLocal, counts[rank], mpi_pixel_type, rbuf, counts, displs, mpi_pixel_type, ROOT, MPI_COMM_WORLD, &req);
 
+        MPI_Wait(&req, &sta);
         if(rank == ROOT) {
                 transformerDeuxDimTransposed(tab, rbuf, height, width);
                 Ecriture_image(tab, "copie.bmp");
